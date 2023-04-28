@@ -4,7 +4,7 @@ import torch
 
 from training.train_utils import AverageMeter,ProgressMeter,accuracy
 
-def train(train_loader, train_loader_lin, model, criterion, 
+def train(train_loader, train_loader_lin, model, criterion_siam, criterion_lin, 
           optimizer_encoder, optimizer_d, optimizer_lin, epoch, args,log_path):
 
     batch_time = AverageMeter('Time', ':6.3f')
@@ -20,7 +20,7 @@ def train(train_loader, train_loader_lin, model, criterion,
     end = time.time()
     train_iter_lin = iter(train_loader_lin)
     train_epoch_lin = 0
-    for i, (images, y) in enumerate(train_loader):
+    for i, (images, _) in enumerate(train_loader):
         # switch to train mode
         model.train()
         # measure data loading time
@@ -36,14 +36,15 @@ def train(train_loader, train_loader_lin, model, criterion,
             images_l_t, labels_t = train_iter_lin.next()
 
         if args.gpu is not None:
-            
-            y = y.cuda(args.gpu, non_blocking=True)
+            # two different augmented views
             for k in range(2):
                 images[k] = images[k].cuda(args.gpu, non_blocking=True)
+            # resize-cropped views (no other augs applied)
             for k in range(len(images)-5,len(images)):
                 images[k] = images[k].cuda(args.gpu, non_blocking=True)
             image_k = images[0]
-            image_q = images[1:2]
+            image_q = images[1]
+            # parse diversely augmented views to get [a list of imgs] & [a list of aug compositions]
             st_trans_list = []
             image_strong_list = []
             for j in range(2,len(images)-5):
@@ -58,18 +59,17 @@ def train(train_loader, train_loader_lin, model, criterion,
             images_l_t = images_l_t.cuda(args.gpu, non_blocking=True)
             labels_t = labels_t.cuda(args.gpu, non_blocking=True)
 
-        output, target, q_strong_angle, d = model(image_q, image_k, image_strong_list, image_cluster, st_trans_list)
+        p1, p2, z1, z2, q_strong_angle, d = model(image_q, image_k, image_strong_list, image_cluster, st_trans_list)
         pred = model.module.lin_forward(images_l_t)
-        loss_l = criterion(pred, labels_t)
+        loss_l = criterion_lin(pred, labels_t)
         loss_contrastive = 0
         loss_angle = 0
        
-        for k in range(len(output)):
-            loss1 = criterion(output[k], target[k])
-            loss_contrastive += loss1
+        # contrastive loss
+        loss_contrastive = -(criterion_siam(p1, z2).mean() + criterion_siam(p2, z1).mean()) * 0.5
+        # consistency loss
         for k in range(len(q_strong_angle)):
-            loss2 = torch.nn.functional.softplus(d[k]-q_strong_angle[k])
-            loss_angle += loss2
+            loss_angle += torch.nn.functional.softplus(d[k]-q_strong_angle[k])
         
         loss = loss_contrastive + args.alpha * loss_angle
         # acc1/acc5 are (K+1)-way contrast classifier accuracy
@@ -84,19 +84,18 @@ def train(train_loader, train_loader_lin, model, criterion,
         loss.backward(retain_graph=True)
         optimizer_encoder.step()
         
-        output, target, q_strong_angle_, d = model(image_q, image_k, image_strong_list, image_cluster, st_trans_list)
-        loss_contrastive = 0
+        p1, p2, z1, z2, q_strong_angle_, d = model(image_q, image_k, image_strong_list, image_cluster, st_trans_list)
         loss_angle = 0
-        for k in range(len(output)):
-            loss1 = criterion(output[k], target[k])
-            loss_contrastive += loss1
+
+        # contrastive loss
+        loss_contrastive = -(criterion_siam(p1, z2).mean() + criterion_siam(p2, z1).mean()) * 0.5
+        # consistency loss
         for k in range(len(q_strong_angle_)):
-            loss2 = torch.nn.functional.softplus(d[k]-q_strong_angle_[k])
-            loss_angle += loss2
+            loss_angle += torch.nn.functional.softplus(d[k]-q_strong_angle_[k])
         loss_prime = loss_contrastive + args.alpha * loss_angle
 
         pred_ = model.module.lin_forward(images_l_t)
-        loss_l_prime = criterion(pred_, labels_t)
+        loss_l_prime = criterion_lin(pred_, labels_t)
 
         # softmax factor update
         denom = loss_prime - loss

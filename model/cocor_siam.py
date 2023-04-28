@@ -73,7 +73,7 @@ class CoCor_siam(nn.Module):
         scores = torch.sum(scores)
         return scores/x.size(0)
 
-    def forward(self, im_q_list, im_k, im_strong_list, cluster_list, st_trans):
+    def forward(self, im_q, im_k, im_strong_list, cluster_list, st_trans):
         """
         :param im_q_list: query image list
         :param im_k: key image
@@ -82,9 +82,8 @@ class CoCor_siam(nn.Module):
         weak: logit_list, label_list
         strong: logit_list, label_list
         """
-        z1 = self.projector(self.backbone(x1)) # NxC
-        z2 = self.projector(self.backbone(x2)) # NxC
-
+        z1 = self.projector(self.backbone(im_k)) # NxC
+        z2 = self.projector(self.backbone(im_q)) # NxC
         p1 = self.predictor(z1) # NxC
         p2 = self.predictor(z2) # NxC
     
@@ -115,7 +114,7 @@ class CoCor_siam(nn.Module):
         for trans in st_trans:
             d.append(torch.mean(self.mapping(trans)))
     
-        return logits0_list, labels0_list, q_strong_angle, d
+        return p1, p2, z1.detach(), z2.detach(), q_strong_angle, d
 
 
 @torch.no_grad()
