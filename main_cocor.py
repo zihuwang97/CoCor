@@ -7,7 +7,7 @@
 from ops.argparser import  argparser
 from ops.Config_Envrionment import Config_Environment
 import torch.multiprocessing as mp
-from training.main_worker import main_worker
+from training.main_worker_siam import main_worker
 def main(args):
     #config environment
     ngpus_per_node=Config_Environment(args)

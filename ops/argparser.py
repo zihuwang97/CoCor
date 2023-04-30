@@ -9,9 +9,7 @@ def argparser():
     parser.add_argument('--arch', metavar='ARCH', default='resnet50',
                         type=str,
                         help='model architecture: (default: resnet50)')
-    parser.add_argument('--framework', metavar='ARCH', default='resnet50',
-                        type=str,
-                        help='model architecture: (default: resnet50)')
+    parser.add_argument('--framework', type=str, default="simsiam", help="framework to be built upon, default:simsiam")
     parser.add_argument('--workers', default=32, type=int, metavar='N',
                         help='number of data loading workers (default: 32)')
     parser.add_argument('--epochs', default=200, type=int, metavar='N',

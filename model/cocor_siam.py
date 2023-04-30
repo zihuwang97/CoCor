@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from build_models import load_backbone, load_mlp
+from model.build_models import load_backbone, load_mlp
 
 class monot_nn(nn.Module):
     def __init__(self, augpool_size: int):

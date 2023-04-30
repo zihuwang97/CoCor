@@ -60,8 +60,8 @@ def train(train_loader, train_loader_lin, model, criterion_siam, criterion_lin,
             labels_t = labels_t.cuda(args.gpu, non_blocking=True)
 
         p1, p2, z1, z2, q_strong_angle, d = model(image_q, image_k, image_strong_list, image_cluster, st_trans_list)
-        pred = model.module.lin_forward(images_l_t)
-        loss_l = criterion_lin(pred, labels_t)
+        # pred = model.module.lin_forward(images_l_t)
+        # loss_l = criterion_lin(pred, labels_t)
         loss_contrastive = 0
         loss_angle = 0
        
@@ -74,7 +74,7 @@ def train(train_loader, train_loader_lin, model, criterion_siam, criterion_lin,
         loss = loss_contrastive + args.alpha * loss_angle
         # acc1/acc5 are (K+1)-way contrast classifier accuracy
         # measure accuracy and record loss
-        acc1, acc5 = accuracy(output[0], target[0], topk=(1, 5))
+        acc1, acc5 = accuracy(p1, p2, topk=(1, 5))
         losses.update(loss.item(), images[0].size(0))
         top1.update(acc1[0], images[0].size(0))
         top5.update(acc5[0], images[0].size(0))
@@ -84,36 +84,36 @@ def train(train_loader, train_loader_lin, model, criterion_siam, criterion_lin,
         loss.backward(retain_graph=True)
         optimizer_encoder.step()
         
-        p1, p2, z1, z2, q_strong_angle_, d = model(image_q, image_k, image_strong_list, image_cluster, st_trans_list)
-        loss_angle = 0
+        # p1, p2, z1, z2, q_strong_angle_, d = model(image_q, image_k, image_strong_list, image_cluster, st_trans_list)
+        # loss_angle = 0
 
-        # contrastive loss
-        loss_contrastive = -(criterion_siam(p1, z2).mean() + criterion_siam(p2, z1).mean()) * 0.5
-        # consistency loss
-        for k in range(len(q_strong_angle_)):
-            loss_angle += torch.nn.functional.softplus(d[k]-q_strong_angle_[k])
-        loss_prime = loss_contrastive + args.alpha * loss_angle
+        # # contrastive loss
+        # loss_contrastive = -(criterion_siam(p1, z2).mean() + criterion_siam(p2, z1).mean()) * 0.5
+        # # consistency loss
+        # for k in range(len(q_strong_angle_)):
+        #     loss_angle += torch.nn.functional.softplus(d[k]-q_strong_angle_[k])
+        # loss_prime = loss_contrastive + args.alpha * loss_angle
 
-        pred_ = model.module.lin_forward(images_l_t)
-        loss_l_prime = criterion_lin(pred_, labels_t)
+        # pred_ = model.module.lin_forward(images_l_t)
+        # loss_l_prime = criterion_lin(pred_, labels_t)
 
-        # softmax factor update
-        denom = loss_prime - loss
-        denom = torch.clamp(denom,min=1e-4) if denom>=0 else torch.clamp(denom,max=-1e-4)
-        diff = (loss_l_prime - loss_l)/denom
-        loss_curve = 0
-        for k in range(len(q_strong_angle_)):
-            t = torch.exp(d[k]-q_strong_angle_[k]) / torch.square(1+torch.exp(d[k]-q_strong_angle_[k]))
-            loss_curve += t.detach() * diff.detach() * (q_strong_angle_[k]-q_strong_angle[k]).detach() * d[k]
-        loss_curve = loss_curve + 0*loss_prime #+ torch.sum(pred_)
-        optimizer_d.zero_grad()
-        loss_curve.backward()
-        optimizer_d.step()
+        # # softmax factor update
+        # denom = loss_prime - loss
+        # denom = torch.clamp(denom,min=1e-4) if denom>=0 else torch.clamp(denom,max=-1e-4)
+        # diff = (loss_l_prime - loss_l)/denom
+        # loss_curve = 0
+        # for k in range(len(q_strong_angle_)):
+        #     t = torch.exp(d[k]-q_strong_angle_[k]) / torch.square(1+torch.exp(d[k]-q_strong_angle_[k]))
+        #     loss_curve += t.detach() * diff.detach() * (q_strong_angle_[k]-q_strong_angle[k]).detach() * d[k]
+        # loss_curve = loss_curve + 0*loss_prime #+ torch.sum(pred_)
+        # optimizer_d.zero_grad()
+        # loss_curve.backward()
+        # optimizer_d.step()
 
-        # projector update
-        optimizer_lin.zero_grad()
-        loss_l_prime.backward()
-        optimizer_lin.step()
+        # # projector update
+        # optimizer_lin.zero_grad()
+        # loss_l_prime.backward()
+        # optimizer_lin.step()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
